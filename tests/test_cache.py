@@ -7,41 +7,33 @@ def setup_function() -> None:
 
 
 def test_miss_returns_none() -> None:
-    conversation = [{"role": "user", "content": "ls -la"}]
-    assert cache.get(conversation) is None
+    assert cache.get("root", "/root", "ls -la") is None
 
 
 def test_hit_returns_stored_response() -> None:
-    conversation = [{"role": "user", "content": "ls -la"}]
-    cache.set(conversation, "total 0")
+    cache.set("root", "/root", "ls -la", "total 0")
 
-    assert cache.get(conversation) == "total 0"
-
-
-def test_different_conversation_is_a_different_key() -> None:
-    cache.set([{"role": "user", "content": "ls -la"}], "total 0")
-
-    assert cache.get([{"role": "user", "content": "pwd"}]) is None
+    assert cache.get("root", "/root", "ls -la") == "total 0"
 
 
-def test_same_content_hits_regardless_of_list_construction() -> None:
-    """Two separately-built but identical conversations must hit the same
-    cache entry - the key is derived from content, not object identity."""
-    cache.set([{"role": "user", "content": "whoami"}], "root")
+def test_different_command_is_a_different_key() -> None:
+    cache.set("root", "/root", "ls -la", "total 0")
 
-    rebuilt = [dict(role="user", content="whoami")]
-    assert cache.get(rebuilt) == "root"
+    assert cache.get("root", "/root", "pwd") is None
 
 
-def test_longer_history_is_a_different_key_than_a_prefix_of_it() -> None:
-    """A follow-up command changes the conversation Cowrie resends, so it
-    must not collide with the cached entry for the shorter history."""
-    first_turn = [{"role": "user", "content": "cd /tmp"}]
-    cache.set(first_turn, "")
+def test_different_cwd_is_a_different_key() -> None:
+    """The same command in a different fake directory must not collide -
+    otherwise an attacker who cd'd somewhere else would get a cached ls
+    listing that belongs to a different directory."""
+    cache.set("root", "/root", "ls", "total 0")
 
-    second_turn = [
-        {"role": "user", "content": "cd /tmp"},
-        {"role": "assistant", "content": ""},
-        {"role": "user", "content": "ls"},
-    ]
-    assert cache.get(second_turn) is None
+    assert cache.get("root", "/tmp", "ls") is None
+
+
+def test_different_session_is_a_different_key() -> None:
+    """Two different attacker sessions must not share cached answers, even
+    with the same command and the same cwd."""
+    cache.set("root", "/root", "whoami", "root")
+
+    assert cache.get("attacker2", "/root", "whoami") is None

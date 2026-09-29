@@ -1,27 +1,27 @@
 # just an in memory cache for llm responses
 #
-# keying off the whole conversation for now since we dont have session
-# state tracking yet - once that exists this should key off
-# (session_id, cwd, command) instead of the raw convo
+# keys off (session_key, cwd, command) now that session_state.py exists -
+# so the same command in a different fake directory or different session
+# doesnt collide with a cached answer that doesnt actually apply to it
 import hashlib
-import json
 
 _cache: dict[str, str] = {}
 
 
-def _make_key(conversation: list[dict]) -> str:
-    serialized = json.dumps(conversation, sort_keys=True)
-    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+def _make_key(session_key: str, cwd: str, command: str) -> str:
+    raw = f"{session_key}\x00{cwd}\x00{command}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def get(conversation: list[dict]) -> str | None:
-    # returns the cached response if we've seen this exact convo before
-    return _cache.get(_make_key(conversation))
+def get(session_key: str, cwd: str, command: str) -> str | None:
+    # returns the cached response if weve seen this exact command in this
+    # exact session + directory before
+    return _cache.get(_make_key(session_key, cwd, command))
 
 
-def set(conversation: list[dict], response: str) -> None:
-    # saves the response so we dont call claude again for the same convo
-    _cache[_make_key(conversation)] = response
+def set(session_key: str, cwd: str, command: str, response: str) -> None:
+    # saves the response so we dont call claude again for the same thing
+    _cache[_make_key(session_key, cwd, command)] = response
 
 
 def clear() -> None:
