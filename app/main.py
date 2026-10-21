@@ -49,9 +49,24 @@ def _build_claude_messages(
     # with no user turn at all, so if theres nothing else left we just use
     # that text as the user turn instead - otherwise claude throws an error
     # on an empty message list
-    conversation = [
-        {"role": m.role, "content": m.content} for m in messages if m.role != "system"
-    ]
+    # cowrie sends empty (or no) assistant turns for commands with no output,
+    # which leaves two commands back to back and claude answers the wrong one.
+    # fill those gaps with a placeholder so every command has its own reply.
+    conversation = []
+    for m in messages:
+        if m.role == "system":
+            continue
+        text = m.content if (m.content and m.content.strip()) else ""
+        if m.role == "user":
+            if conversation and conversation[-1]["role"] == "user":
+                conversation.append({"role": "assistant", "content": "[no output]"})
+            conversation.append({"role": "user", "content": text})
+        else:
+            if conversation and conversation[-1]["role"] == "assistant":
+                continue
+            conversation.append({"role": "assistant", "content": text or "[no output]"})
+    while conversation and conversation[0]["role"] == "assistant":
+        conversation.pop(0)
     if not conversation and cowrie_system:
         conversation = [{"role": "user", "content": cowrie_system}]
     return conversation

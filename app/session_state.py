@@ -65,7 +65,10 @@ def build_state_prompt(session_key: str) -> str:
     # this gets injected into claude's system prompt so it stays consistent
     # with whats already there instead of making stuff up each time
     state = get_state(session_key)
-    lines = [f"Current working directory: {state.cwd}"]
+    lines = [f"Current working directory: {state.cwd} "
+             "(this ALREADY includes the effect of every earlier command in the "
+             "history, including cd. Never re-apply earlier cd commands; pwd must "
+             "print exactly this path.)"]
     if state.files:
         listing = ", ".join(sorted(state.files))
         lines.append(
@@ -73,6 +76,8 @@ def build_state_prompt(session_key: str) -> str:
         )
     else:
         lines.append("No files or directories have been created yet this session.")
+    from datetime import datetime, timezone
+    lines.append("Current date/time: " + datetime.now(timezone.utc).strftime("%a %b %d %H:%M:%S UTC %Y"))
     return "\n".join(lines)
 
 
