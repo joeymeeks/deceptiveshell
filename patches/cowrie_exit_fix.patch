@@ -1,0 +1,16 @@
+--- src/cowrie/llm/protocol.py.bak	2026-10-20 03:00:54.205274074 +0000
++++ src/cowrie/llm/protocol.py	2026-10-20 03:11:11.451638931 +0000
+@@ -190,6 +190,13 @@
+ 
+         self.events.dispatch("cowrie.command.input", "CMD: %(input)s", input=string)
+ 
++        # DeceptiveShell: exit/logout must really end the session, not go to the LLM
++        cmd = string.strip()
++        if cmd in ("exit", "logout") or cmd.startswith(("exit ", "logout ")):
++            self.terminal.write(b"logout\n")
++            self.terminal.loseConnection()
++            return
++
+         # Use LLM client to get a response
+         self._process_command_with_llm(string)
+ 
