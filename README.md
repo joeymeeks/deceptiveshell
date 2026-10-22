@@ -165,7 +165,7 @@ the fake filesystem state actually persists across commands.
 
 | Name | Role |
 |---|---|
-| Joey Meeks | Security Lead: threat model, probe testing, analysis |
+| Joey Meeks | Security Lead: threat model, probe testing, analysis, deployment |
 | Shiva Patel | Build Lead: middleware, integration, deployment |
 | Cole Belew | Evaluation: data analysis, comparison, write-up |
 
