@@ -70,6 +70,44 @@ def test_touch_adds_a_path_under_current_cwd() -> None:
     assert "/root/notes.txt" in session_state.get_state("root").files
 
 
+def test_rm_removes_a_tracked_file() -> None:
+    session_state.update_state("root", "touch notes.txt")
+    session_state.update_state("root", "rm notes.txt")
+
+    assert "/root/notes.txt" not in session_state.get_state("root").files
+
+
+def test_rmdir_removes_a_tracked_directory() -> None:
+    session_state.update_state("root", "mkdir loot")
+    session_state.update_state("root", "rmdir loot")
+
+    assert "/root/loot" not in session_state.get_state("root").files
+
+
+def test_rm_of_an_untracked_file_does_not_error() -> None:
+    session_state.update_state("root", "rm nonexistent.txt")
+
+    assert session_state.get_state("root").files == set()
+
+
+def test_mv_renames_a_tracked_file() -> None:
+    session_state.update_state("root", "touch old.txt")
+    session_state.update_state("root", "mv old.txt new.txt")
+
+    state = session_state.get_state("root")
+    assert "/root/old.txt" not in state.files
+    assert "/root/new.txt" in state.files
+
+
+def test_cp_adds_the_destination_and_keeps_the_source() -> None:
+    session_state.update_state("root", "touch original.txt")
+    session_state.update_state("root", "cp original.txt copy.txt")
+
+    state = session_state.get_state("root")
+    assert "/root/original.txt" in state.files
+    assert "/root/copy.txt" in state.files
+
+
 def test_unrelated_command_does_not_change_state() -> None:
     session_state.update_state("root", "ls -la")
 
@@ -98,3 +136,21 @@ def test_build_state_prompt_lists_created_files() -> None:
 
     prompt = session_state.build_state_prompt("root")
     assert "/root/notes.txt" in prompt
+
+
+def test_files_fingerprint_empty_when_no_files() -> None:
+    assert session_state.files_fingerprint("root") == ""
+
+
+def test_files_fingerprint_changes_when_a_file_is_created() -> None:
+    before = session_state.files_fingerprint("root")
+    session_state.update_state("root", "touch notes.txt")
+    after = session_state.files_fingerprint("root")
+
+    assert before != after
+
+
+def test_files_fingerprint_is_isolated_per_session() -> None:
+    session_state.update_state("root", "touch notes.txt")
+
+    assert session_state.files_fingerprint("attacker2") == ""

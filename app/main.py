@@ -85,13 +85,18 @@ async def chat_completions(request: ChatCompletionRequest) -> dict:
     # than just the raw conversation text
     session_key = session_state.get_session_key(cowrie_system)
     cwd_before = session_state.get_state(session_key).cwd
+    # files_fingerprint has to be captured here too, same as cwd_before -
+    # otherwise "ls" right after "touch foo" hits the same cache entry as an
+    # earlier "ls" in the same cwd and serves the stale pre-touch answer,
+    # since cwd+command alone dont change when a file gets created
+    files_before = session_state.files_fingerprint(session_key)
     command = (
         conversation[-1]["content"]
         if conversation and conversation[-1]["role"] == "user"
         else ""
     )
 
-    content = cache.get(session_key, cwd_before, command)
+    content = cache.get(session_key, cwd_before, files_before, command)
     if content is None:
         # inject whats already "there" from earlier in this session before
         # asking claude to simulate the new command, so it cant just make
@@ -108,7 +113,7 @@ async def chat_completions(request: ChatCompletionRequest) -> dict:
             )
         except ClaudeError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-        cache.set(session_key, cwd_before, command, content)
+        cache.set(session_key, cwd_before, files_before, command, content)
 
     # apply whatever this command did (cd/mkdir/touch) so the next command
     # in this session sees the updated state

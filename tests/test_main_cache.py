@@ -91,3 +91,52 @@ def test_cd_persists_across_requests_in_the_same_session(monkeypatch) -> None:
     client.post("/v1/chat/completions", json=pwd_body)
 
     assert "/tmp" in seen_state_prompts[-1]
+
+
+def test_repeated_command_after_file_creation_is_not_a_stale_cache_hit(
+    monkeypatch,
+) -> None:
+    """Found live: 'ls' right after 'touch text.txt' was returning the
+    cached answer from an EARLIER 'ls' (before the file existed), since the
+    cache key was only (session, cwd, command) and touch doesn't change
+    cwd. Claude must actually get asked again once a file's been created,
+    even though the command and cwd are identical to before."""
+    get_calls = _mock_completion(monkeypatch, response="total 0")
+
+    ls_body = {"model": "claude-haiku-4-5", "messages": [{"role": "user", "content": "ls"}]}
+    touch_body = {
+        "model": "claude-haiku-4-5",
+        "messages": [{"role": "user", "content": "touch text.txt"}],
+    }
+
+    client.post("/v1/chat/completions", json=ls_body)  # ls #1 - cache miss
+    client.post("/v1/chat/completions", json=touch_body)  # not cached on "ls" at all
+    client.post("/v1/chat/completions", json=ls_body)  # ls #2 - must NOT reuse ls #1's cache
+
+    assert get_calls() == 3
+
+
+def test_repeated_command_after_file_removal_is_not_a_stale_cache_hit(
+    monkeypatch,
+) -> None:
+    """Same bug class as the touch case above, but for rm/rmdir/mv/cp -
+    those weren't tracked by session_state at all until this was found, so
+    none of them changed the files fingerprint either."""
+    get_calls = _mock_completion(monkeypatch, response="text.txt")
+
+    ls_body = {"model": "claude-haiku-4-5", "messages": [{"role": "user", "content": "ls"}]}
+    touch_body = {
+        "model": "claude-haiku-4-5",
+        "messages": [{"role": "user", "content": "touch text.txt"}],
+    }
+    rm_body = {
+        "model": "claude-haiku-4-5",
+        "messages": [{"role": "user", "content": "rm text.txt"}],
+    }
+
+    client.post("/v1/chat/completions", json=touch_body)
+    client.post("/v1/chat/completions", json=ls_body)  # ls #1 - cache miss
+    client.post("/v1/chat/completions", json=rm_body)
+    client.post("/v1/chat/completions", json=ls_body)  # ls #2 - must NOT reuse ls #1's cache
+
+    assert get_calls() == 4

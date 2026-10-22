@@ -1,7 +1,9 @@
-# tracks a fake filesystem per session so cd/mkdir/touch stay consistent
-# across commands, since cowrie itself never tracks any of this (self.cwd
-# on cowrie's side is set once to "/" and never updated - see readme's
-# "known limitation: no session identifier" section for more on this)
+# tracks a fake filesystem per session so cd/mkdir/touch/rm/rmdir/mv/cp stay
+# consistent across commands, since cowrie itself never tracks any of this
+# (self.cwd on cowrie's side is set once to "/" and never updated - see
+# readme's "known limitation: no session identifier" section for more on
+# this). still basic - no quoted paths with spaces, no chained commands,
+# no recursive rm -r of a whole tree's contents
 import posixpath
 import re
 from dataclasses import dataclass, field
@@ -45,8 +47,8 @@ def _resolve_path(cwd: str, target: str) -> str:
 
 
 def update_state(session_key: str, command: str) -> None:
-    # only cares about cd/mkdir/touch - every other command leaves state
-    # untouched since it doesnt create anything or change directory
+    # cd/mkdir/touch/rm/rmdir/mv/cp - every other command leaves state
+    # untouched since it doesnt create, delete, or move anything
     state = get_state(session_key)
     parts = command.split()
     if not parts:
@@ -60,6 +62,25 @@ def update_state(session_key: str, command: str) -> None:
     elif cmd in ("mkdir", "touch"):
         for name in args:
             state.files.add(_resolve_path(state.cwd, name))
+    elif cmd in ("rm", "rmdir"):
+        # found the same stale-cache bug here as mkdir/touch had: without
+        # this, "ls" after "rm foo" still shows foo, since nothing ever
+        # removed it from the tracked set (or changed the cache key)
+        for name in args:
+            state.files.discard(_resolve_path(state.cwd, name))
+    elif cmd == "mv" and len(args) >= 2:
+        state.files.discard(_resolve_path(state.cwd, args[0]))
+        state.files.add(_resolve_path(state.cwd, args[1]))
+    elif cmd == "cp" and len(args) >= 2:
+        state.files.add(_resolve_path(state.cwd, args[1]))
+
+
+def files_fingerprint(session_key: str) -> str:
+    # a stable string representing whatever files/dirs exist right now, so
+    # main.py can fold it into the cache key - cwd+command alone dont change
+    # when mkdir/touch runs, which let a stale "ls" answer get served after
+    # a file was created in the same directory
+    return ",".join(sorted(get_state(session_key).files))
 
 
 def build_state_prompt(session_key: str) -> str:

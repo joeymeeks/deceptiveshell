@@ -7,33 +7,44 @@ def setup_function() -> None:
 
 
 def test_miss_returns_none() -> None:
-    assert cache.get("root", "/root", "ls -la") is None
+    assert cache.get("root", "/root", "", "ls -la") is None
 
 
 def test_hit_returns_stored_response() -> None:
-    cache.set("root", "/root", "ls -la", "total 0")
+    cache.set("root", "/root", "", "ls -la", "total 0")
 
-    assert cache.get("root", "/root", "ls -la") == "total 0"
+    assert cache.get("root", "/root", "", "ls -la") == "total 0"
 
 
 def test_different_command_is_a_different_key() -> None:
-    cache.set("root", "/root", "ls -la", "total 0")
+    cache.set("root", "/root", "", "ls -la", "total 0")
 
-    assert cache.get("root", "/root", "pwd") is None
+    assert cache.get("root", "/root", "", "pwd") is None
 
 
 def test_different_cwd_is_a_different_key() -> None:
     """The same command in a different fake directory must not collide -
     otherwise an attacker who cd'd somewhere else would get a cached ls
     listing that belongs to a different directory."""
-    cache.set("root", "/root", "ls", "total 0")
+    cache.set("root", "/root", "", "ls", "total 0")
 
-    assert cache.get("root", "/tmp", "ls") is None
+    assert cache.get("root", "/tmp", "", "ls") is None
 
 
 def test_different_session_is_a_different_key() -> None:
     """Two different attacker sessions must not share cached answers, even
     with the same command and the same cwd."""
-    cache.set("root", "/root", "whoami", "root")
+    cache.set("root", "/root", "", "whoami", "root")
 
-    assert cache.get("attacker2", "/root", "whoami") is None
+    assert cache.get("attacker2", "/root", "", "whoami") is None
+
+
+def test_different_files_fingerprint_is_a_different_key() -> None:
+    """Found live: 'ls' right after 'touch foo' was hitting the same cache
+    entry as an earlier 'ls' in the same cwd, since cwd+command alone don't
+    change when a file gets created - serving a stale pre-touch answer
+    instead of ever asking claude about the new file. The files fingerprint
+    must be part of the key so this can't happen."""
+    cache.set("root", "/root", "", "ls", "total 0")
+
+    assert cache.get("root", "/root", "/root/text.txt", "ls") is None
