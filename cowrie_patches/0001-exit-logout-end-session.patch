@@ -1,0 +1,18 @@
+diff --git a/src/cowrie/llm/protocol.py b/src/cowrie/llm/protocol.py
+index 5d21200..c369ac8 100644
+--- a/src/cowrie/llm/protocol.py
++++ b/src/cowrie/llm/protocol.py
+@@ -196,6 +196,13 @@ class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):
+ 
+         self.events.dispatch("cowrie.command.input", "CMD: %(input)s", input=string)
+ 
++        # DeceptiveShell: exit/logout must really end the session, not go to the LLM
++        cmd = string.strip()
++        if cmd in ("exit", "logout") or cmd.startswith(("exit ", "logout ")):
++            self.terminal.write(b"logout\n")
++            self.terminal.loseConnection()
++            return
++
+         # Use LLM client to get a response
+         self._process_command_with_llm(string)
+ 

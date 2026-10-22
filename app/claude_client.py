@@ -4,7 +4,11 @@ from anthropic import AsyncAnthropic
 
 from app.config import ANTHROPIC_API_KEY, ANTHROPIC_MAX_TOKENS, ANTHROPIC_MODEL
 
-_client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else AsyncAnthropic()
+_client = (
+    AsyncAnthropic(api_key=ANTHROPIC_API_KEY, timeout=15.0, max_retries=1)
+    if ANTHROPIC_API_KEY
+    else AsyncAnthropic(timeout=15.0, max_retries=1)
+)
 
 
 # gets raised if claude cant be reached or sends back an error
@@ -31,8 +35,21 @@ async def get_completion(
         kwargs["temperature"] = min(max(temperature, 0.0), 1.0)
 
     try:
+        # dropping temperature before the real call - joey found passing it
+        # through caused problems in live testing against cowrie, so for now
+        # claude just uses its own default instead
+        kwargs.pop("temperature", None)
         response = await _client.messages.create(**kwargs)
     except anthropic.APIError as exc:
         raise ClaudeError(f"Claude API error: {exc}") from exc
 
-    return "".join(block.text for block in response.content if block.type == "text")
+    text = "".join(block.text for block in response.content if block.type == "text")
+    # claude sometimes keeps going and invents the next command/turn - cut
+    # that off at the first sign of it
+    for marker in ("Human:", "Assistant:"):
+        text = text.split(marker)[0]
+    # "[no output]" is our own placeholder marker (see prompts.py/main.py)
+    # for a silent command - strip it so it never actually shows up in the
+    # attacker's terminal
+    text = text.replace("[no output]", "")
+    return text

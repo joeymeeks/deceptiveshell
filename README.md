@@ -21,9 +21,15 @@ honeypot, and disconnect, which leaves defenders with short, low-value sessions.
 
 ## Our Approach
 
-We hook into the point where Cowrie fails to find a command and send that command to an LLM
-instead. The generated output goes back into the live session, so the attacker sees a shell
-that responds believably to anything they type.
+Cowrie has a built-in `[llm]` backend mode: instead of its normal fixed command set, it sends
+*every* command the attacker types to an OpenAI-compatible API and returns the response as the
+terminal output. We point that at our own middleware instead of OpenAI directly, which adds a
+locked-down persona prompt, response caching, and per-session fake filesystem tracking (current
+directory, created files) so the LLM can't contradict itself later in the same session.
+
+This is a config-only integration - Cowrie's own source code is never modified, aside from one
+small required patch (`exit`/`logout` ending the session for real instead of going to the LLM),
+documented in `cowrie_patches/`.
 
 ## Research Question
 
@@ -44,24 +50,27 @@ We run both honeypots at the same time and compare them on:
 ## How It Works
 
 ```
-Attacker ──SSH──▶ Cowrie ──▶ Is the command built in?
-                                  │
-                        ┌─────────┴─────────┐
-                       Yes                   No
-                        │                     │
-                 Cowrie's output      DeceptiveShell middleware
-                                              │
-                                        LLM (Claude API)
-                                              │
-                                   Output sent back to attacker
+Attacker ──SSH──▶ Cowrie's [llm] backend ──▶ DeceptiveShell middleware ──▶ Claude API
+                                                     │                          │
+                                              cache + per-session       raw terminal
+                                              fake filesystem state    output, no chat
+                                                     │                          │
+                                                     └────────── Output sent back ─────┘
+                                                                  to attacker
 ```
 
-- **Integration point:** the `if not cmdclass:` branch in `HoneyPotShell._run_expanded()`
-  (`src/cowrie/shell/honeypot.py`)
-- **Non-blocking:** the LLM call runs with `deferToThread` so a slow API response doesn't
-  freeze other sessions
-- **Fallback:** if the API fails or times out, the honeypot falls back to Cowrie's normal
-  `command not found` behavior
+- **Integration point:** `cowrie.cfg`'s `[honeypot] backend = llm` + `[llm] host`/`path`
+  pointed at this middleware - see `app/README` setup below. The one Cowrie-side source
+  change still needed (`exit`/`logout` ending the session for real instead of going to the
+  LLM) is in `cowrie_patches/`.
+- **Caching:** keyed on session + current fake directory + the exact command, so a repeat
+  doesn't cost another API call or risk a different answer the second time.
+- **Session-state tracking:** Cowrie's own `[llm]` backend never tracks a fake filesystem
+  itself - this middleware does, parsing the attacker's username out of Cowrie's own system
+  prompt text (no Cowrie config changes needed for that part) since Cowrie never sends a real
+  session ID.
+- **Fallback:** if the API fails, the middleware returns an error rather than silently making
+  something up.
 
 ---
 
@@ -95,16 +104,32 @@ ANTHROPIC_API_KEY=your-key-here
 ```
 
 ### Integrate with Cowrie
-1. Copy the middleware into Cowrie's `src/` folder
-2. Add the hook to `src/cowrie/shell/honeypot.py` at the `if not cmdclass:` branch
+1. Apply `cowrie_patches/0001-exit-logout-end-session.patch` to your Cowrie checkout (required -
+   without it, typing `exit` sends to the LLM instead of actually ending the session). See
+   `cowrie_patches/README.md`.
+2. In `cowrie.cfg`:
+   ```ini
+   [honeypot]
+   backend = llm
+
+   [llm]
+   host = http://localhost:8000
+   path = /v1/chat/completions
+   api_key = not-needed
+   model = claude-sonnet-5
+   max_tokens = 500
+   temperature = 0.7
+   ```
 3. Restart Cowrie: `cowrie restart`
 
 ### Test
 ```bash
 ssh -p 2222 root@localhost
 ```
-Type a command Cowrie doesn't implement, like `vmstat` or `lsof`. If you get made-up output
-and a prompt afterward, it's working.
+Type any command - since the `[llm]` backend replaces Cowrie's whole shell, everything
+(`ls`, `pwd`, `vmstat`, anything) goes through the LLM. If you get believable output and a
+prompt afterward, it's working. Also try `cd somewhere`, then `pwd` on the next line, to confirm
+the fake filesystem state actually persists across commands.
 
 ---
 
@@ -126,8 +151,10 @@ and a prompt afterward, it's working.
 | Cloud VM provisioned and secured | ✅ Complete |
 | Baseline Cowrie running, logging verified | ✅ Complete |
 | LLM validated (7/7 shell commands stayed in character) | ✅ Complete |
-| Middleware written | ✅ Complete |
-| Middleware integrated with Cowrie | 🔲 In progress |
+| Middleware written (caching + session-state tracking) | ✅ Complete |
+| Automated tests for middleware logic (27 passing) | ✅ Complete |
+| Cowrie `[llm]` backend wired to the middleware + exit/logout patch | ✅ Complete |
+| Full live test on the actual deployment VM | 🔲 Not started |
 | Red-team testing and hardening | 🔲 Not started |
 | Live deployment and data collection | 🔲 Not started |
 | Analysis, paper, and presentation | 🔲 Not started |
