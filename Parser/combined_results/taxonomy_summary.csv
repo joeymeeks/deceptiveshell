@@ -1,0 +1,6 @@
+taxonomy_primary,session_count,avg_session_length_seconds,avg_command_count,avg_depth_of_engagement,distinct_source_ips,most_common_dropoff,examples
+Credential abuse,2,12.37,1.50,1.50,127.0.0.1,Session ended after: exit,exit
+Download / payload staging,2,88.69,8.50,5.00,127.0.0.1,Session ended after: exit,exit
+File system probe,7,181.87,6.57,4.00,127.0.0.1,Session ended after: exit,exit; pwd
+Low engagement,1,10.89,0.00,0.00,127.0.0.1,No commands issued,
+Reconnaissance,9,37.82,3.22,2.78,127.0.0.1; 203.0.113.10,Session ended after: exit,exit

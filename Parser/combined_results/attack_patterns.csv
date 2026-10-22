@@ -1,0 +1,6 @@
+taxonomy_tag,session_count,avg_session_length_seconds,avg_command_count,avg_depth_of_engagement,sample_last_commands,sample_taxonomy_primary
+credential_abuse,2,12.37,1.50,1.50,exit,Credential abuse
+download_attempt,2,88.69,8.50,5.00,exit,Download / payload staging
+filesystem_manipulation,7,181.87,6.57,4.00,exit; pwd,File system probe
+low_engagement,1,10.89,0.00,0.00,,Low engagement
+reconnaissance,9,37.82,3.22,2.78,exit,Reconnaissance
