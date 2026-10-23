@@ -1,0 +1,12 @@
+--- src/cowrie/llm/protocol.py.bak2	2026-10-23 15:50:43.657874901 +0000
++++ src/cowrie/llm/protocol.py	2026-10-23 15:50:43.675712112 +0000
+@@ -370,6 +370,9 @@
+         HoneyPotBaseProtocol.connectionMade(self)
+         self.setTimeout(60)
+ 
++        # DeceptiveShell: log exec commands the same way the shell backend does
++        self.events.dispatch("cowrie.command.input", "CMD: %(input)s", input=self.execcmd)
++
+         # Process the exec command with LLM
+         self._process_exec_with_llm()
+ 
