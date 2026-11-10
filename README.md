@@ -154,9 +154,9 @@ the fake filesystem state actually persists across commands.
 | Middleware written (caching + session-state tracking) | ✅ Complete |
 | Automated tests for middleware logic (27 passing) | ✅ Complete |
 | Cowrie `[llm]` backend wired to the middleware + exit/logout patch | ✅ Complete |
-| Full live test on the actual deployment VM | 🔲 Not started |
-| Red-team testing and hardening | 🔲 Not started |
-| Live deployment and data collection | 🔲 Not started |
+| Full live test on the actual deployment VM | ✅ Complete |
+| Red-team testing and hardening | ✅ Complete |
+| Live deployment and data collection | ✅ Complete |
 | Analysis, paper, and presentation | 🔲 Not started |
 
 ---
