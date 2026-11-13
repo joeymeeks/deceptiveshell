@@ -157,7 +157,7 @@ the fake filesystem state actually persists across commands.
 | Full live test on the actual deployment VM | ✅ Complete |
 | Red-team testing and hardening | ✅ Complete |
 | Live deployment and data collection | ✅ Complete |
-| Analysis, paper, and presentation | ✅ Not started |
+| Analysis, paper, and presentation | ✅ Complete |
 
 ---
 
